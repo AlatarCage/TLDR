@@ -1,3 +1,4 @@
+// Service worker — required for PWA share target to work
 const CACHE = "tldr-v1";
 
 self.addEventListener("install", e => {
@@ -14,6 +15,7 @@ self.addEventListener("activate", e => {
 });
 
 self.addEventListener("fetch", e => {
+  // Only cache same-origin GET requests
   if (e.request.method !== "GET" || !e.request.url.startsWith(self.location.origin)) return;
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
