@@ -28,8 +28,26 @@
 
   <script>
     const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-    // Free CORS proxy — lets us fetch any article HTML from the browser
-    const PROXY = "https://corsproxy.io/?url=";
+
+    // Try multiple CORS proxies in order until one works
+    const PROXIES = [
+      async (url) => {
+        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+        if (!res.ok) throw new Error("allorigins failed");
+        const json = await res.json();
+        return json.contents || "";
+      },
+      async (url) => {
+        const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(url)}`);
+        if (!res.ok) throw new Error("corsproxy failed");
+        return res.text();
+      },
+      async (url) => {
+        const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`);
+        if (!res.ok) throw new Error("codetabs failed");
+        return res.text();
+      }
+    ];
 
     const params = new URLSearchParams(location.search);
     const sharedUrl   = params.get("url")   || "";
@@ -67,11 +85,11 @@
 
       try {
         setStatus("Fetching article…");
-        const articleText = sharedText || await fetchArticle(sharedUrl);
+        let articleText = sharedText || await fetchArticle(sharedUrl);
 
-        if (!articleText || articleText.trim().length < 60) {
-          showError("Couldn't extract enough text from this page. The site may block external access. Try copying the article text and sharing it instead.");
-          return;
+        // Fallback: summarize from headline + URL when the site blocks all proxies
+        if (!articleText || articleText.trim().length < 100) {
+          articleText = `Article title: ${sharedTitle}\nURL: ${sharedUrl}\n\nNote: the full article text could not be fetched. Summarize what this article is likely about based on the headline and URL, and be clear you are inferring from the headline only.`;
         }
 
         setStatus("Generating summary…");
@@ -83,10 +101,14 @@
     }
 
     async function fetchArticle(url) {
-      const res = await fetch(PROXY + encodeURIComponent(url));
-      if (!res.ok) throw new Error(`Couldn't fetch the page (HTTP ${res.status}).`);
-      const html = await res.text();
-      return extractText(html);
+      for (const proxy of PROXIES) {
+        try {
+          const html = await proxy(url);
+          const text = extractText(html);
+          if (text.trim().length >= 100) return text;
+        } catch {}
+      }
+      return "";
     }
 
     function extractText(html) {
