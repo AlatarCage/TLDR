@@ -15,7 +15,7 @@
       <div>
         <div class="logo-text" id="pageTitle">Summarizing…</div>
         <div class="logo-sub" id="pageDomain"></div>
-        <div style="font-size:10px;color:#45475a">v11</div>
+        <div style="font-size:10px;color:#45475a">v12</div>
       </div>
     </div>
     <div id="content">
@@ -30,8 +30,11 @@
     const WORKER = "https://tldr-proxy.alatarcage.workers.dev/";
 
     const params      = new URLSearchParams(location.search);
-    const sharedUrl   = params.get("url")   || "";
     const sharedTitle = params.get("title") || "";
+    // Android Chrome sometimes sends the URL in "text" instead of "url"
+    const rawText     = params.get("text")  || "";
+    const rawUrl      = params.get("url")   || "";
+    const sharedUrl   = rawUrl || (rawText.startsWith("http") ? rawText : "");
 
     const titleEl  = document.getElementById("pageTitle");
     const domainEl = document.getElementById("pageDomain");
