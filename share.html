@@ -95,16 +95,8 @@
       }
 
       try {
-        setStatus("Fetching article…");
-        let articleText = sharedText || await fetchArticle(sharedUrl);
-
-        // Fallback: summarize from headline + URL when the site blocks all proxies
-        if (!articleText || articleText.trim().length < 100) {
-          articleText = `Article title: ${sharedTitle}\nURL: ${sharedUrl}\n\nNote: the full article text could not be fetched. Summarize what this article is likely about based on the headline and URL, and be clear you are inferring from the headline only.`;
-        }
-
         setStatus("Generating summary…");
-        const summary = await summarize(apiKey, articleText, sharedUrl);
+        const summary = await summarize(apiKey, sharedText || null, sharedUrl, sharedTitle);
         showResult(summary);
       } catch (err) {
         showError(err.message || "Something went wrong.");
@@ -138,23 +130,21 @@
         .slice(0, 8000);
     }
 
-    async function summarize(apiKey, text, url) {
-      const prompt = url
-        ? `Summarize the following article from ${url} in ONE clear paragraph (2-4 sentences). Focus on key facts: who, what, when, where. Write directly — no filler like "This article discusses…".\n\nArticle:\n${text}`
-        : `Summarize the following text in ONE clear paragraph (2-4 sentences). Focus on the key facts and main point.\n\nText:\n${text}`;
+    async function summarize(apiKey, text, url, title) {
+      const prompt = text
+        ? `Summarize the following text in ONE clear paragraph (2-4 sentences). Focus on key facts. Write directly, no filler.\n\n${text}`
+        : `Summarize the article at this URL in ONE clear paragraph (2-4 sentences): ${url}\nHeadline: ${title || ""}\nFocus on key facts: who, what, when, where. Write directly, no filler.`;
 
-      const isOAuth = apiKey.startsWith("AQ.");
-      const url = isOAuth ? GEMINI_URL : `${GEMINI_URL}?key=${apiKey}`;
-      const res = await fetch(url, {
+      const body = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 300 },
+        tools: [{ google_search: {} }]
+      };
+
+      const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(isOAuth ? { "Authorization": `Bearer ${apiKey}` } : {})
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 300 }
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
       });
 
       if (!res.ok) {
