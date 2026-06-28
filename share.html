@@ -15,7 +15,7 @@
       <div>
         <div class="logo-text" id="pageTitle">Summarizing…</div>
         <div class="logo-sub" id="pageDomain"></div>
-        <div style="font-size:10px;color:#45475a">v3</div>
+        <div style="font-size:10px;color:#45475a">v4</div>
       </div>
     </div>
 
@@ -138,8 +138,7 @@
 
       const body = {
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 300 },
-        tools: [{ google_search: {} }]
+        generationConfig: { maxOutputTokens: 300 }
       };
 
       const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
