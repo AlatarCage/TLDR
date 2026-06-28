@@ -27,7 +27,7 @@
   </div>
 
   <script>
-    const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+    const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
     // Try multiple CORS proxies in order until one works
     const PROXIES = [
@@ -132,30 +132,24 @@
         ? `Summarize the following article from ${url} in ONE clear paragraph (2-4 sentences). Focus on key facts: who, what, when, where. Write directly — no filler like "This article discusses…".\n\nArticle:\n${text}`
         : `Summarize the following text in ONE clear paragraph (2-4 sentences). Focus on the key facts and main point.\n\nText:\n${text}`;
 
-      const res = await fetch(ANTHROPIC_URL, {
+      const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 300,
-          messages: [{ role: "user", content: prompt }]
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 300 }
         })
       });
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        if (res.status === 401) throw new Error("Invalid API key. Go back to the TL;DR home page and update it.");
+        if (res.status === 400) throw new Error("Invalid API key. Go back to the TL;DR home page and update it.");
         if (res.status === 429) throw new Error("Rate limit hit — wait a moment and try again.");
         throw new Error(err.error?.message || `API error ${res.status}`);
       }
 
       const data = await res.json();
-      return data.content?.[0]?.text || "No summary generated.";
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || "No summary generated.";
     }
 
     // ── UI helpers ──
