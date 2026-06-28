@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#89b4fa" />
+  <title>TL;DR — AI Summarizer</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="apple-touch-icon" href="icons/icon192.png" />
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <span class="badge">TL;DR</span>
+      <div>
+        <div class="logo-text">AI Summarizer</div>
+        <div class="logo-sub">Powered by Claude</div>
+      </div>
+    </div>
+
+    <label for="apiKey">Anthropic API Key</label>
+    <input type="password" id="apiKey" placeholder="sk-ant-api03-…" autocomplete="off" />
+    <p class="hint">
+      Get a free key at <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a>.
+      Stored only in your browser — never sent anywhere except Anthropic's API.
+    </p>
+
+    <div class="row">
+      <button class="btn-primary" id="saveBtn">Save Key</button>
+      <button class="btn-secondary" id="toggleBtn">Show</button>
+    </div>
+    <div class="status" id="status"></div>
+
+    <hr />
+
+    <p class="steps-title">How to use on Android</p>
+    <div class="step">
+      <span class="step-num">1</span>
+      <p>Tap the browser menu → <strong>Add to Home Screen</strong> to install this app.</p>
+    </div>
+    <div class="step">
+      <span class="step-num">2</span>
+      <p>Browse Chrome normally. When you see a link you want summarized, <strong>long-press it → Share</strong>.</p>
+    </div>
+    <div class="step">
+      <span class="step-num">3</span>
+      <p>Select <strong>TL;DR</strong> from the share sheet. The summary appears in seconds.</p>
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById("apiKey");
+    const status = document.getElementById("status");
+
+    // Load saved key
+    const saved = localStorage.getItem("tldr_api_key");
+    if (saved) input.value = saved;
+
+    document.getElementById("saveBtn").addEventListener("click", () => {
+      const key = input.value.trim();
+      if (!key) return flash("Enter an API key first.", true);
+      if (!key.startsWith("sk-ant-")) return flash("Doesn't look like an Anthropic key (should start with sk-ant-).", true);
+      localStorage.setItem("tldr_api_key", key);
+      flash("✓ Key saved!");
+    });
+
+    document.getElementById("toggleBtn").addEventListener("click", function () {
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      this.textContent = show ? "Hide" : "Show";
+    });
+
+    function flash(msg, isError = false) {
+      status.textContent = msg;
+      status.className = "status" + (isError ? " error" : "");
+      setTimeout(() => { status.textContent = ""; }, 3000);
+    }
+
+    // Register service worker
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js");
+    }
+  </script>
+</body>
+</html>

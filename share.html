@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#89b4fa" />
+  <title>TL;DR</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="share-page">
+  <div class="card" id="card">
+    <div class="logo">
+      <span class="badge">TL;DR</span>
+      <div>
+        <div class="logo-text" id="pageTitle">Summarizing…</div>
+        <div class="logo-sub" id="pageDomain"></div>
+      </div>
+    </div>
+
+    <div id="content">
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <span>Fetching article…</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+    // Free CORS proxy — lets us fetch any article HTML from the browser
+    const PROXY = "https://corsproxy.io/?url=";
+
+    const params = new URLSearchParams(location.search);
+    const sharedUrl   = params.get("url")   || "";
+    const sharedTitle = params.get("title") || "";
+    const sharedText  = params.get("text")  || "";
+
+    const titleEl  = document.getElementById("pageTitle");
+    const domainEl = document.getElementById("pageDomain");
+    const content  = document.getElementById("content");
+
+    // Show the source URL at the top
+    if (sharedTitle) titleEl.textContent = sharedTitle;
+    if (sharedUrl) {
+      try {
+        const u = new URL(sharedUrl);
+        domainEl.textContent = u.hostname.replace("www.", "");
+      } catch {}
+    }
+
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
+
+    run();
+
+    async function run() {
+      const apiKey = localStorage.getItem("tldr_api_key");
+      if (!apiKey) {
+        showNoKey();
+        return;
+      }
+
+      if (!sharedUrl && !sharedText) {
+        showError("No URL or text was shared. Try sharing a link from Chrome.");
+        return;
+      }
+
+      try {
+        setStatus("Fetching article…");
+        const articleText = sharedText || await fetchArticle(sharedUrl);
+
+        if (!articleText || articleText.trim().length < 60) {
+          showError("Couldn't extract enough text from this page. The site may block external access. Try copying the article text and sharing it instead.");
+          return;
+        }
+
+        setStatus("Generating summary…");
+        const summary = await summarize(apiKey, articleText, sharedUrl);
+        showResult(summary);
+      } catch (err) {
+        showError(err.message || "Something went wrong.");
+      }
+    }
+
+    async function fetchArticle(url) {
+      const res = await fetch(PROXY + encodeURIComponent(url));
+      if (!res.ok) throw new Error(`Couldn't fetch the page (HTTP ${res.status}).`);
+      const html = await res.text();
+      return extractText(html);
+    }
+
+    function extractText(html) {
+      return html
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+        .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
+        .replace(/<header[\s\S]*?<\/header>/gi, " ")
+        .replace(/<aside[\s\S]*?<\/aside>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+        .replace(/\s{2,}/g, " ")
+        .trim()
+        .slice(0, 8000);
+    }
+
+    async function summarize(apiKey, text, url) {
+      const prompt = url
+        ? `Summarize the following article from ${url} in ONE clear paragraph (2-4 sentences). Focus on key facts: who, what, when, where. Write directly — no filler like "This article discusses…".\n\nArticle:\n${text}`
+        : `Summarize the following text in ONE clear paragraph (2-4 sentences). Focus on the key facts and main point.\n\nText:\n${text}`;
+
+      const res = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 300,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (res.status === 401) throw new Error("Invalid API key. Go back to the TL;DR home page and update it.");
+        if (res.status === 429) throw new Error("Rate limit hit — wait a moment and try again.");
+        throw new Error(err.error?.message || `API error ${res.status}`);
+      }
+
+      const data = await res.json();
+      return data.content?.[0]?.text || "No summary generated.";
+    }
+
+    // ── UI helpers ──
+
+    function setStatus(msg) {
+      content.innerHTML = `
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <span>${esc(msg)}</span>
+        </div>`;
+    }
+
+    function showResult(summary) {
+      titleEl.textContent = "Summary";
+      content.innerHTML = `
+        <div class="result-box"><p>${esc(summary)}</p></div>
+        <div class="share-actions">
+          <button class="btn-secondary" id="copyBtn">Copy summary</button>
+          <button class="btn-secondary" onclick="history.back()">← Back</button>
+        </div>`;
+      document.getElementById("copyBtn").addEventListener("click", () => {
+        navigator.clipboard.writeText(summary).then(() => {
+          document.getElementById("copyBtn").textContent = "Copied ✓";
+        });
+      });
+    }
+
+    function showError(msg) {
+      titleEl.textContent = "Couldn't summarize";
+      content.innerHTML = `
+        <div class="error-box">${esc(msg)}</div>
+        <button class="btn-secondary" onclick="history.back()">← Back</button>`;
+    }
+
+    function showNoKey() {
+      titleEl.textContent = "Setup needed";
+      content.innerHTML = `
+        <div class="no-key-box">
+          No API key found. Open the TL;DR app from your home screen and save your Anthropic API key first.
+        </div>
+        <a href="/" style="display:block">
+          <button class="btn-primary" style="width:100%">Go to Settings</button>
+        </a>`;
+    }
+
+    function esc(str) {
+      return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+  </script>
+</body>
+</html>
