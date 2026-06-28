@@ -15,7 +15,7 @@
       <div>
         <div class="logo-text" id="pageTitle">Summarizing…</div>
         <div class="logo-sub" id="pageDomain"></div>
-        <div style="font-size:10px;color:#45475a">v4</div>
+        <div style="font-size:10px;color:#45475a">v5</div>
       </div>
     </div>
 
@@ -141,9 +141,15 @@
         generationConfig: { maxOutputTokens: 300 }
       };
 
-      const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      // Auth keys (AQ.) use Bearer token; standard keys (AIza) use ?key= param
+      const isAuthKey = apiKey.startsWith("AQ.");
+      const fetchUrl = isAuthKey ? GEMINI_URL : `${GEMINI_URL}?key=${apiKey}`;
+      const headers = { "Content-Type": "application/json" };
+      if (isAuthKey) headers["Authorization"] = `Bearer ${apiKey}`;
+
+      const res = await fetch(fetchUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(body)
       });
 
