@@ -1,5 +1,5 @@
 // Service worker — required for PWA share target to work
-const CACHE = "tldr-v5";
+const CACHE = "tldr-v7";
 
 self.addEventListener("install", e => {
   e.waitUntil(

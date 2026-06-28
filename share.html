@@ -15,7 +15,7 @@
       <div>
         <div class="logo-text" id="pageTitle">Summarizing…</div>
         <div class="logo-sub" id="pageDomain"></div>
-        <div style="font-size:10px;color:#45475a">v6</div>
+        <div style="font-size:10px;color:#45475a">v7</div>
       </div>
     </div>
 
@@ -28,7 +28,7 @@
   </div>
 
   <script>
-    const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+    const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
     async function fetchWithTimeout(url, options = {}, ms = 6000) {
       const ctrl = new AbortController();
@@ -141,10 +141,17 @@
         generationConfig: { maxOutputTokens: 300 }
       };
 
-      const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      const res = await fetch(GROQ_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "llama3-8b-8192",
+          messages: [{ role: "user", content: prompt }],
+          max_tokens: 300
+        })
       });
 
       if (!res.ok) {
@@ -153,7 +160,7 @@
       }
 
       const data = await res.json();
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || "No summary generated.";
+      return data.choices?.[0]?.message?.content || "No summary generated.";
     }
 
     // ── UI helpers ──
