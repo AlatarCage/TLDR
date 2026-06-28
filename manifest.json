@@ -2,7 +2,7 @@
   "name": "TL;DR — AI Summarizer",
   "short_name": "TL;DR",
   "description": "Share any link to get an instant AI summary",
-  "start_url": "/",
+  "start_url": "/TLDR/",
   "display": "standalone",
   "background_color": "#1e1e2e",
   "theme_color": "#89b4fa",
@@ -12,7 +12,7 @@
     { "src": "icons/icon512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "share_target": {
-    "action": "/share.html",
+    "action": "/TLDR/share.html",
     "method": "GET",
     "params": {
       "title": "title",
