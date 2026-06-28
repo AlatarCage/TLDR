@@ -15,38 +15,32 @@
       <div>
         <div class="logo-text" id="pageTitle">Summarizing…</div>
         <div class="logo-sub" id="pageDomain"></div>
-        <div style="font-size:10px;color:#45475a">v9</div>
+        <div style="font-size:10px;color:#45475a">v10</div>
       </div>
     </div>
-
     <div id="content">
       <div class="loading-state">
         <div class="spinner"></div>
-        <span>Fetching article…</span>
+        <span>Starting…</span>
       </div>
     </div>
   </div>
 
   <script>
     const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-    const PROXY = "https://tldr-proxy.alatarcage.workers.dev/?url=";
+    const PROXY    = "https://tldr-proxy.alatarcage.workers.dev/?url=";
 
-    const params = new URLSearchParams(location.search);
-    const sharedUrl   = params.get("url")   || "";
-    const sharedTitle = params.get("title") || "";
-    const sharedText  = params.get("text")  || "";
+    const params     = new URLSearchParams(location.search);
+    const sharedUrl  = params.get("url")   || "";
+    const sharedTitle= params.get("title") || "";
 
     const titleEl  = document.getElementById("pageTitle");
     const domainEl = document.getElementById("pageDomain");
     const content  = document.getElementById("content");
 
-    // Show the source URL at the top
     if (sharedTitle) titleEl.textContent = sharedTitle;
     if (sharedUrl) {
-      try {
-        const u = new URL(sharedUrl);
-        domainEl.textContent = u.hostname.replace("www.", "");
-      } catch {}
+      try { domainEl.textContent = new URL(sharedUrl).hostname.replace("www.", ""); } catch {}
     }
 
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/TLDR/sw.js");
@@ -55,22 +49,20 @@
 
     async function run() {
       const apiKey = localStorage.getItem("tldr_api_key");
-      if (!apiKey) {
-        showNoKey();
-        return;
-      }
-
-      if (!sharedUrl && !sharedText) {
-        showError("No URL or text was shared. Try sharing a link from Chrome.");
-        return;
-      }
+      if (!apiKey) { showNoKey(); return; }
+      if (!sharedUrl) { showError("No URL was shared. Long-press a link in Chrome → Share → TL;DR."); return; }
 
       try {
         setStatus("Fetching article…");
-        const articleText = sharedText || await fetchArticle(sharedUrl);
+        const articleText = await fetchArticle(sharedUrl);
+
+        if (!articleText || articleText.trim().length < 80) {
+          showError("Couldn't extract enough text from this page.");
+          return;
+        }
 
         setStatus("Generating summary…");
-        const summary = await summarize(apiKey, articleText, sharedUrl, sharedTitle);
+        const summary = await summarize(apiKey, articleText);
         showResult(summary);
       } catch (err) {
         showError(err.message || "Something went wrong.");
@@ -79,11 +71,8 @@
 
     async function fetchArticle(url) {
       const res = await fetch(PROXY + encodeURIComponent(url));
-      if (!res.ok) throw new Error(`Proxy error ${res.status}`);
-      return extractText(await res.text());
-    }
-
-    function extractText(html) {
+      if (!res.ok) throw new Error(`Could not fetch article (${res.status})`);
+      const html = await res.text();
       return html
         .replace(/<script[\s\S]*?<\/script>/gi, " ")
         .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -93,19 +82,13 @@
         .replace(/<aside[\s\S]*?<\/aside>/gi, " ")
         .replace(/<[^>]+>/g, " ")
         .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
         .replace(/\s{2,}/g, " ")
         .trim()
-        .slice(0, 8000);
+        .slice(0, 6000);
     }
 
-    async function summarize(apiKey, text, url, title) {
+    async function summarize(apiKey, text) {
       const prompt = `Summarize the following news article in ONE clear English paragraph (2-4 sentences). Focus on key facts: who, what, when, where. Write directly, no filler.\n\nArticle:\n${text}`;
-
-      const body = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 300 }
-      };
 
       const res = await fetch(GROQ_URL, {
         method: "POST",
@@ -122,14 +105,12 @@
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(`[${res.status}] ${err.error?.message || "Unknown API error"}`);
+        throw new Error(`[${res.status}] ${err.error?.message || "API error"}`);
       }
 
       const data = await res.json();
       return data.choices?.[0]?.message?.content || "No summary generated.";
     }
-
-    // ── UI helpers ──
 
     function setStatus(msg) {
       content.innerHTML = `
@@ -145,35 +126,45 @@
         <div class="result-box"><p>${esc(summary)}</p></div>
         <div class="share-actions">
           <button class="btn-secondary" id="copyBtn">Copy summary</button>
-          <button class="btn-secondary" onclick="history.back()">← Back</button>
+          <button class="btn-secondary" id="closeBtn">✕ Close</button>
         </div>`;
       document.getElementById("copyBtn").addEventListener("click", () => {
         navigator.clipboard.writeText(summary).then(() => {
           document.getElementById("copyBtn").textContent = "Copied ✓";
         });
       });
+      document.getElementById("closeBtn").addEventListener("click", closeView);
     }
 
     function showError(msg) {
       titleEl.textContent = "Couldn't summarize";
       content.innerHTML = `
         <div class="error-box">${esc(msg)}</div>
-        <button class="btn-secondary" onclick="history.back()">← Back</button>`;
+        <button class="btn-secondary" onclick="closeView()">✕ Close</button>`;
     }
 
     function showNoKey() {
       titleEl.textContent = "Setup needed";
       content.innerHTML = `
         <div class="no-key-box">
-          No API key found. Open the TL;DR app from your home screen and save your Anthropic API key first.
+          No API key found. Open the TL;DR app from your home screen and save your Groq API key first.
         </div>
-        <a href="/TLDR/" style="display:block">
+        <a href="/TLDR/" style="display:block;margin-top:8px">
           <button class="btn-primary" style="width:100%">Go to Settings</button>
         </a>`;
     }
 
+    function closeView() {
+      // In PWA share mode there's no history — close the window or go home
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.close();
+      }
+    }
+
     function esc(str) {
-      return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     }
   </script>
 </body>
