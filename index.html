@@ -60,7 +60,6 @@
     document.getElementById("saveBtn").addEventListener("click", () => {
       const key = input.value.trim();
       if (!key) return flash("Enter an API key first.", true);
-      if (!key.startsWith("AIza")) return flash("Doesn't look like a Gemini key (should start with AIza).", true);
       localStorage.setItem("tldr_api_key", key);
       flash("✓ Key saved!");
     });
